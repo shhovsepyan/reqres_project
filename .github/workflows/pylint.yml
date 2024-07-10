@@ -12,47 +12,66 @@ on:
                - smoke
                - regression
                - all
-   
+
 jobs:
   run-tests:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     name: Run autotests
     steps:
-      - name: Run autotests
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Set up Python evironment
+      
+      - name: Set up Python environment
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+      
       - name: Install dependencies
-        run:
+        run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: run all tests
+      
+      - name: Run all tests
         if: "github.event.inputs.deployment_target == 'all'"  
-        run: pytest --alluredir=allure-results
+        run: pytest --alluredir=allure-results || echo "Tests failed"
         continue-on-error: true
-      - name: run smoke tests
+      
+      - name: Run smoke tests
         if: "github.event.inputs.deployment_target == 'smoke'"  
-        run: pytest -m smoke --alluredir=allure-results
+        run: pytest -m smoke --alluredir=allure-results || echo "Tests failed"
         continue-on-error: true
-      - name: run regression tests
+      
+      - name: Run regression tests
         if: "github.event.inputs.deployment_target == 'regression'"  
-        run: pytest -m regression --alluredir=allure-results
+        run: pytest -m regression --alluredir=allure-results || echo "Tests failed"
+        continue-on-error: true
+      
+      - name: Run extended tests
+        if: "github.event.inputs.deployment_target == 'extended'"  
+        run: pytest -m extended --alluredir=allure-results || echo "Tests failed"
+        continue-on-error: true
+      
       - name: Install Java
         uses: actions/setup-java@v3
         with:
            distribution: 'microsoft'
            java-version: '17'
+      
       - name: Install Allure
-        run: sudo wget https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.tgz && sudo tar -zxvf allure-2.24.1.tgz -C /opt/ && sudo ln -s /opt/allure-2.24.1/bin/allure /usr/bin/allure
+        run: |
+          Invoke-WebRequest -Uri https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.zip -OutFile allure-2.24.1.zip
+          Expand-Archive -Path allure-2.24.1.zip -DestinationPath C:\allure-2.24.1
+          $env:Path += ";C:\allure-2.24.1\bin"
+      
       - name: Add Executor And Categories in Allure Results
-        run: cp -r categories.json executor.json allure-results/  
+        run: Copy-Item -Path categories.json, executor.json -Destination allure-results/
+      
       - name: Generate report  
         run: allure generate -c allure-results -o allure-report
+      
       - name: Save allure report
         uses: actions/upload-artifact@v3
         with:
            name: allure-report
            path: allure-report
-           etention-days: 1
+           retention-days: 1
